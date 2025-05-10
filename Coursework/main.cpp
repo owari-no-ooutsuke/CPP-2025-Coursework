@@ -5,12 +5,14 @@
 #define BLOCK_HEIGHT 20
 #define BLOCKS_IN_ROW 5
 #define BLOCKS_COUNT 25
-#define START_SPEED 30
+#define START_SPEED 50
 #define SPEED_BOOST 2
 #define DELTA 5
 #define BONUS_TYPE_COUNT 5
 #define PADDLE_SPEED 100
-#define BONUS_SPEED 20
+#define BONUS_SPEED 10
+#define LOSS_POINTS -10
+#define MIN_WIN_POINTS 10
 
 using std::vector;
 
@@ -25,7 +27,7 @@ enum BonusType {
     CHANGE_SPEED,
     CHANGE_STICKING,
     BOTTOM,
-    CHANGE_TRAJECTORY
+    EXTRA_BALL
 };
 
 class Object {
@@ -52,6 +54,8 @@ class Ball : public Moving {
 public:
     Ball();
     void Reflect(Direction dir);
+    bool isSticky;
+    bool isStuck;
 };
 
 Ball::Ball() {
@@ -61,6 +65,8 @@ Ball::Ball() {
     dirX = 1;
     dirY = -1;
     color = sf::Color::Red;
+    isSticky = false;
+    isStuck = false;
 }
 
 void Ball::Reflect(Direction dir) {
@@ -100,67 +106,65 @@ public:
 
 class Bonus : public Moving {
 public:
-    Bonus();
+    Bonus(float startX, float startY, BonusType bonusType);
     BonusType type;
     bool isDropped;
-    void Drop(float startX, float startY, Board& board);
-    void Activate(Board& board);
 };
 
-Bonus::Bonus() {
-    x = 0;
-    y = 0;
-    dirX = 0;
-    dirY = 0;
-    speed = BONUS_SPEED;
-    type = (BonusType)(rand() % BONUS_TYPE_COUNT);
-    isDropped = false;
-};
-
-void Bonus::Drop(float startX, float startY, Board& board) {
+Bonus::Bonus(float startX, float startY, BonusType bonusType) {
     x = startX;
     y = startY;
+    dirX = 0;
     dirY = 1;
-}
-
-void Bonus::Activate(Board& board) {
-    isDropped = false;
+    speed = BONUS_SPEED;
+    isDropped = true;
+    type = bonusType;
     switch ((int)type)
     {
-    case 0:
-        board.paddle.size += ((rand() % 2) * 2 - 1) * BLOCK_WIDTH;
-        break;
     case 1:
-        board.ball.speed += ((rand() % 2) * 2 - 1) * SPEED_BOOST * 2;
+        color = sf::Color::Yellow;
         break;
     case 2:
+        color = sf::Color::Red;
         break;
     case 3:
+        color = sf::Color::Blue;
         break;
     case 4:
+        color = sf::Color::Cyan;
+        break;
+    case 5:
+        color = sf::Color::Magenta;
         break;
     }
-}
-
+};
 
 class Block : public Object {
 public:
     Block() { isActive = true; color = sf::Color::Green; };
     bool isActive;
+    int health;
+    bool isDestructible;
     BonusType bonusType;
     virtual void OnCollision(Board& board) = 0;
 };
 
 class IndestructibleBlock : public Block {
 public:
-    IndestructibleBlock(float leftX, float topY) { x = leftX; y = topY; bonusType = NONE; };
+    IndestructibleBlock(float leftX, float topY);
     void OnCollision(Board& board) override { };
+};
+
+IndestructibleBlock::IndestructibleBlock(float leftX, float topY) {
+    x = leftX;
+    y = topY;
+    bonusType = NONE;
+    isDestructible = false;
 };
 
 class SpeedBoostBlock : public Block {
 public:
     SpeedBoostBlock(float leftX, float topY);
-    int health;
     void OnCollision(Board& board) override;
 };
 
@@ -169,6 +173,7 @@ SpeedBoostBlock::SpeedBoostBlock(float leftX, float topY) {
     y = topY;
     health = rand() % 3 + 1;
     bonusType = NONE;
+    isDestructible = true;
 };
 
 void SpeedBoostBlock::OnCollision(Board& board) {
@@ -183,7 +188,6 @@ void SpeedBoostBlock::OnCollision(Board& board) {
 class PlainBlock : public Block {
 public:
     PlainBlock(float leftX, float topY);
-    int health;
     void OnCollision(Board& board) override;
 };
 
@@ -192,6 +196,7 @@ PlainBlock::PlainBlock(float leftX, float topY) {
     y = topY;
     health = rand() % 3 + 1;
     bonusType = (BonusType)(rand() % 6);
+    isDestructible = true;
 };
 
 void PlainBlock::OnCollision(Board& board) {
@@ -208,15 +213,23 @@ public:
     Board& board;
     vector<Block*> blocks;
     vector<Bonus> bonuses;
+    bool bottomActivated;
+    void DropBonus(float x, float y, BonusType bonusType);
+    void ActivateBonus(Bonus bonus);
+    void HitAnimation(int blockIndex);
     void HandleCollisions();
     void Update(float dTime);
     void Display();
+    void LossTextDisplay();
+    void WinTextDisplay();
+    void CheckGameOver();
 };
 
 Game::Game(Board& b) : board(b) {
+    bottomActivated = false;
     int blockType;
     for (int i = 0; i < BLOCKS_COUNT; i++) {
-        blockType = rand() % 3;
+        blockType = rand() % 5;
         if (blockType == 0) {
             IndestructibleBlock* b = new IndestructibleBlock((i % BLOCKS_IN_ROW) * BLOCK_WIDTH,
                 (i / BLOCKS_IN_ROW) * BLOCK_HEIGHT);
@@ -235,6 +248,70 @@ Game::Game(Board& b) : board(b) {
     }
 }
 
+void Game::DropBonus(float x, float y, BonusType bonusType) {
+    Bonus bonus(x, y, bonusType);
+    bonuses.push_back(bonus);
+}
+
+void Game::ActivateBonus(Bonus bonus) {
+    switch ((int)bonus.type)
+    {
+    case 1:
+        if (board.paddle.size <= BLOCK_WIDTH) {
+            board.paddle.size += BLOCK_WIDTH / 4;
+        }
+        else {
+            board.paddle.size += (float)((rand() % 2) * 2 - 1) * BLOCK_WIDTH / 4;
+        }
+        break;
+    case 2:
+        if (board.ball.speed <= START_SPEED) {
+            board.ball.speed += SPEED_BOOST * 2;
+        }
+        else {
+            board.ball.speed += ((rand() % 2) * 2 - 1) * SPEED_BOOST;
+        }
+        break;
+    case 3:
+        if (board.ball.isSticky) {
+            board.ball.isSticky = false;
+        }
+        else {
+            board.ball.isSticky = true;
+        }
+        break;
+    case 4:
+        bottomActivated = true;
+        break;
+    case 5:
+        break;
+    }
+}
+
+void Game::HitAnimation(int blockIndex) {
+    if (blocks[blockIndex]->isDestructible) {
+        sf::Color color;
+        if (blocks[blockIndex]->health == 3) {
+            color = sf::Color::White;
+        }
+        else if (blocks[blockIndex]->health == 2) {
+            color = sf::Color::Yellow;
+        }
+        else {
+            color = sf::Color::Red;
+        }
+
+        for (int i = 0; i < 2; i++) {
+            blocks[blockIndex]->color = color;
+            Display();
+            Sleep(30);
+            blocks[blockIndex]->color = sf::Color::Green;
+            Display();
+            Sleep(30);
+        }
+    }
+}
+
 void Game::HandleCollisions() {
     if (board.ball.x <= 0  board.ball.x >= WINDOW_SIZE) {
         board.ball.Reflect(HORIZONTAL);
@@ -242,12 +319,34 @@ void Game::HandleCollisions() {
     if (board.ball.y >= WINDOW_SIZE - BLOCK_HEIGHT - 2 * DELTA
         && board.ball.x >= board.paddle.x - DELTA
         && board.ball.x <= board.paddle.x + board.paddle.size + DELTA) {
-        board.ball.Reflect(VERTICAL);
+        if (board.ball.isSticky) {
+            board.ball.isStuck = true;
+            board.ball.speed = board.paddle.speed;
+            board.ball.dirY = 0;
+        }
+        else {
+            board.ball.Reflect(VERTICAL);
+        }
     }
     else if (board.ball.y >= WINDOW_SIZE - DELTA) {
-        Sleep(200);
-        board.points--;
-        board.ball.Reflect(VERTICAL);
+        if (bottomActivated) {
+            board.ball.Reflect(VERTICAL);
+            bottomActivated = false;
+        }
+        else {
+            board.ball.color = sf::Color::Black;
+            Display();
+            Sleep(400);
+
+            board.ball.color = sf::Color::Red;
+            board.ball.x = WINDOW_SIZE / 2;
+            board.ball.y = WINDOW_SIZE / 2;
+            board.ball.dirX = 1;
+            board.ball.dirY = -1;
+            board.points--;
+            Display();
+            Sleep(400);
+        }
     }
     else if (board.ball.y <= 0) {
         board.ball.Reflect(VERTICAL);
@@ -271,19 +370,41 @@ void Game::HandleCollisions() {
                     if (board.ball.y <= topY || board.ball.y >= topY + BLOCK_HEIGHT) {
                         board.ball.Reflect(VERTICAL);
                     }
+                    HitAnimation(i);
                     blocks[i]->OnCollision(board);
                     if (blocks[i]->isActive == false && blocks[i]->bonusType != NONE) {
-                        //Drop Bonus
+                        DropBonus(blocks[i]->x + BLOCK_WIDTH / 2, blocks[i]->y + BLOCK_HEIGHT,
+                            blocks[i]->bonusType);
                     }
                     break;
                 }
             }
         }
     }
+    for (int i = 0; i < bonuses.size(); i++) {
+        if (bonuses[i].isDropped) {
+            if (bonuses[i].y >= WINDOW_SIZE - BLOCK_HEIGHT - 2 * DELTA
+                && bonuses[i].x >= board.paddle.x - DELTA
+                && bonuses[i].x <= board.paddle.x + board.paddle.size + DELTA) {
+                bonuses[i].isDropped = false;
+                ActivateBonus(bonuses[i]);
+            }
+            else if (bonuses[i].y >= WINDOW_SIZE) {
+                bonuses[i].isDropped = false;
+            }
+        }
+    }
 };
 
 void Game::Update(float dTime) {
-    board.ball.Move(dTime);
+    if (board.ball.isStuck == false) {
+        board.ball.Move(dTime);
+    }
+    for (int i = 0; i < bonuses.size(); i++) {
+        if (bonuses[i].isDropped) {
+            bonuses[i].Move(dTime);
+        }
+    }
     HandleCollisions();
 }
 
@@ -299,6 +420,14 @@ void Game::Display() {
             board.window.draw(r);
         }
     }
+
+    if (bottomActivated) {
+        sf::RectangleShape bottom({ WINDOW_SIZE, DELTA });
+        bottom.setPosition({ 0, WINDOW_SIZE - DELTA });
+        bottom.setFillColor(sf::Color::White);
+        board.window.draw(bottom);
+    }
+
     sf::RectangleShape p({ board.paddle.size, BLOCK_HEIGHT });
     p.setPosition({ board.paddle.x, board.paddle.y });
     p.setFillColor(board.paddle.color);
@@ -308,7 +437,7 @@ void Game::Display() {
 
     sf::CircleShape c;
     c.setRadius(12);
-    c.setPosition(board.ball.x, board.ball.y);
+    c.setPosition({ board.ball.x, board.ball.y });
     c.setFillColor(board.ball.color);
     board.window.draw(c);
 
@@ -317,8 +446,60 @@ void Game::Display() {
     text.setFillColor(sf::Color::White);
     board.window.draw(text);
 
+    for (int i = 0; i < bonuses.size(); i++) {
+        if (bonuses[i].isDropped) {
+            sf::CircleShape bon(15, 4);
+            bon.setPosition({ bonuses[i].x, bonuses[i].y });
+            bon.setFillColor(bonuses[i].color);
+            board.window.draw(bon);
+        }
+    }
+
     board.window.display();
 }
+
+void Game::LossTextDisplay() {
+    sf::Text text("Game Over!\n You Lost!\n Points: " + std::to_string(board.points),
+        board.font, 50);
+    text.setPosition({ 260, 300 });
+    text.setFillColor(sf::Color::White);
+    board.window.clear();
+    board.window.draw(text);
+    board.window.display();
+    Sleep(5000);
+}
+
+void Game::WinTextDisplay() {
+    sf::Text text("Game Over!\n  You Won!\n  Points: " + std::to_string(board.points),
+        board.font, 50);
+    text.setPosition({ 260, 300 });
+    text.setFillColor(sf::Color::White);
+    board.window.clear();
+    board.window.draw(text);
+    board.window.display();
+    Sleep(5000);
+}
+
+void Game::CheckGameOver() {
+    if (board.points < LOSS_POINTS) {
+        LossTextDisplay();
+        board.window.close();
+        return;
+    }
+    for (int i = 0; i < BLOCKS_COUNT; i++) {
+        if (blocks[i]->isDestructible && blocks[i]->isActive) {
+            return;
+        }
+    }
+    if (board.points >= MIN_WIN_POINTS) {
+        WinTextDisplay();
+        board.window.close();
+    }
+    else {
+        LossTextDisplay();
+        board.window.close();
+    }
+};
 
 
 int main() {
@@ -329,21 +510,45 @@ int main() {
     font.loadFromFile("C:/Windows/Fonts/Arial.ttf");
 
     Board b(window, font);
-    Game g(b);
-    g.Display();
+    Game game(b);
+    game.Display();
+
+    float ballSpeed, ballDirX;
 
     while (window.isOpen()) {
 
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
-                if (g.board.paddle.x > 0) {
-                    g.board.paddle.dirX = -1;
-                    g.board.paddle.Move(0.01);
+        if (game.board.ball.isStuck == false) {
+            ballSpeed = game.board.ball.speed;
+            ballDirX = game.board.ball.dirX;
+        }
+
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
+            if (game.board.paddle.x > 0) {
+                game.board.paddle.dirX = -1;
+                game.board.paddle.Move(0.01);
+                if (game.board.ball.isStuck) {
+                    game.board.ball.dirX = -1;
+                    game.board.ball.Move(0.01);
                 }
             }
+        }
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
-            if (g.board.paddle.x < WINDOW_SIZE - BLOCK_WIDTH) {
-                g.board.paddle.dirX = 1;
-                g.board.paddle.Move(0.01);
+            if (game.board.paddle.x < WINDOW_SIZE - game.board.paddle.size) {
+                game.board.paddle.dirX = 1;
+                game.board.paddle.Move(0.01);
+                if (game.board.ball.isStuck) {
+                    game.board.ball.dirX = 1;
+                    game.board.ball.Move(0.01);
+                }
+            }
+        }
+
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
+            if (game.board.ball.isStuck) {
+                game.board.ball.isStuck = false;
+                game.board.ball.speed = ballSpeed;
+                game.board.ball.dirX = ballDirX;
+                game.board.ball.dirY = -1;
             }
         }
 
@@ -354,8 +559,9 @@ int main() {
             }
         }
 
-        g.Update(0.01);
-        g.Display();
+        game.Update(0.01);
+        game.Display();
+        game.CheckGameOver();
     }
     return 0;
 }
