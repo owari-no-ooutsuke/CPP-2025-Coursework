@@ -5,8 +5,9 @@
 #define BLOCK_HEIGHT 20
 #define BLOCKS_IN_ROW 5
 #define BLOCKS_COUNT 25
-#define START_SPEED 50
-#define SPEED_BOOST 2
+#define BALL_RADIUS 12
+#define START_SPEED 26
+#define SPEED_BOOST 1
 #define DELTA 5
 #define BONUS_TYPE_COUNT 5
 #define PADDLE_SPEED 100
@@ -96,13 +97,19 @@ Paddle::Paddle() {
 
 class Board {
 public:
-    Board(sf::RenderWindow& wind, sf::Font f) : window(wind), font(f) { points = 0; };
-    Ball ball;
+    Board(sf::RenderWindow& wind, sf::Font f);
+    vector<Ball> balls;
     Paddle paddle;
     int points;
     sf::RenderWindow& window;
     sf::Font font;
 };
+
+Board::Board(sf::RenderWindow& wind, sf::Font f) : window(wind), font(f) {
+    points = 0;
+    Ball b;
+    balls.push_back(b);
+}
 
 class Bonus : public Moving {
 public:
@@ -146,13 +153,13 @@ public:
     int health;
     bool isDestructible;
     BonusType bonusType;
-    virtual void OnCollision(Board& board) = 0;
+    virtual void OnCollision(Board& board, int ballIndex) = 0;
 };
 
 class IndestructibleBlock : public Block {
 public:
     IndestructibleBlock(float leftX, float topY);
-    void OnCollision(Board& board) override { };
+    void OnCollision(Board& board, int ballIndex) override { };
 };
 
 IndestructibleBlock::IndestructibleBlock(float leftX, float topY) {
@@ -165,7 +172,7 @@ IndestructibleBlock::IndestructibleBlock(float leftX, float topY) {
 class SpeedBoostBlock : public Block {
 public:
     SpeedBoostBlock(float leftX, float topY);
-    void OnCollision(Board& board) override;
+    void OnCollision(Board& board, int ballIndex) override;
 };
 
 SpeedBoostBlock::SpeedBoostBlock(float leftX, float topY) {
@@ -176,8 +183,8 @@ SpeedBoostBlock::SpeedBoostBlock(float leftX, float topY) {
     isDestructible = true;
 };
 
-void SpeedBoostBlock::OnCollision(Board& board) {
-    board.ball.speed += SPEED_BOOST;
+void SpeedBoostBlock::OnCollision(Board& board, int ballIndex) {
+    board.balls[ballIndex].speed += SPEED_BOOST;
     health--;
     board.points++;
     if (health == 0) {
@@ -188,7 +195,7 @@ void SpeedBoostBlock::OnCollision(Board& board) {
 class PlainBlock : public Block {
 public:
     PlainBlock(float leftX, float topY);
-    void OnCollision(Board& board) override;
+    void OnCollision(Board& board, int ballIndex) override;
 };
 
 PlainBlock::PlainBlock(float leftX, float topY) {
@@ -199,7 +206,7 @@ PlainBlock::PlainBlock(float leftX, float topY) {
     isDestructible = true;
 };
 
-void PlainBlock::OnCollision(Board& board) {
+void PlainBlock::OnCollision(Board& board, int ballIndex) {
     health--;
     board.points++;
     if (health == 0) {
@@ -217,6 +224,8 @@ public:
     void DropBonus(float x, float y, BonusType bonusType);
     void ActivateBonus(Bonus bonus);
     void HitAnimation(int blockIndex);
+    void SingleBallCollisions(int ballIndex);
+    void BallOnBallCollisions();
     void HandleCollisions();
     void Update(float dTime);
     void Display();
@@ -265,25 +274,36 @@ void Game::ActivateBonus(Bonus bonus) {
         }
         break;
     case 2:
-        if (board.ball.speed <= START_SPEED) {
-            board.ball.speed += SPEED_BOOST * 2;
-        }
-        else {
-            board.ball.speed += ((rand() % 2) * 2 - 1) * SPEED_BOOST;
+        for (int i = 0; i < board.balls.size(); i++) {
+            if (board.balls[i].speed <= START_SPEED) {
+                board.balls[i].speed += SPEED_BOOST * 2;
+            }
+            else {
+                board.balls[i].speed += ((rand() % 2) * 2 - 1) * SPEED_BOOST;
+            }
         }
         break;
     case 3:
-        if (board.ball.isSticky) {
-            board.ball.isSticky = false;
+        for (int i = 0; i < board.balls.size(); i++) {
+            if (board.balls[i].isSticky) {
+                board.balls[i].isSticky = false;
+            }
+            else {
+                board.balls[i].isSticky = true;
+            }
+            break;
         }
-        else {
-            board.ball.isSticky = true;
-        }
-        break;
     case 4:
         bottomActivated = true;
         break;
     case 5:
+        if (board.balls.size() == 1) {
+            Ball b;
+            board.balls.push_back(b);
+        }
+        else {
+            board.balls.pop_back();
+        }
         break;
     }
 }
@@ -312,44 +332,50 @@ void Game::HitAnimation(int blockIndex) {
     }
 }
 
-void Game::HandleCollisions() {
-    if (board.ball.x <= 0  board.ball.x >= WINDOW_SIZE) {
-        board.ball.Reflect(HORIZONTAL);
+void Game::SingleBallCollisions(int ballIndex) {
+    if (board.balls[ballIndex].x <= 0   board.balls[ballIndex].x >= WINDOW_SIZE) {
+        board.balls[ballIndex].Reflect(HORIZONTAL);
     }
-    if (board.ball.y >= WINDOW_SIZE - BLOCK_HEIGHT - 2 * DELTA
-        && board.ball.x >= board.paddle.x - DELTA
-        && board.ball.x <= board.paddle.x + board.paddle.size + DELTA) {
-        if (board.ball.isSticky) {
-            board.ball.isStuck = true;
-            board.ball.speed = board.paddle.speed;
-            board.ball.dirY = 0;
+    if (board.balls[ballIndex].y >= WINDOW_SIZE - BLOCK_HEIGHT - 2 * DELTA
+        && board.balls[ballIndex].x >= board.paddle.x - DELTA
+        && board.balls[ballIndex].x <= board.paddle.x + board.paddle.size + DELTA) {
+        if (board.balls[ballIndex].isSticky) {
+            board.balls[ballIndex].isStuck = true;
+            board.balls[ballIndex].speed = board.paddle.speed;
+            board.balls[ballIndex].dirY = 0;
         }
         else {
-            board.ball.Reflect(VERTICAL);
+            if (board.balls[ballIndex].y <= WINDOW_SIZE - BLOCK_HEIGHT) {
+                board.balls[ballIndex].Reflect(VERTICAL);
+            }
+            if (board.balls[ballIndex].x <= board.paddle.x
+                board.balls[ballIndex].x >= board.paddle.x + board.paddle.size) {
+                board.balls[ballIndex].Reflect(HORIZONTAL);
+            }
         }
     }
-    else if (board.ball.y >= WINDOW_SIZE - DELTA) {
+    else if (board.balls[ballIndex].y >= WINDOW_SIZE - DELTA) {
         if (bottomActivated) {
-            board.ball.Reflect(VERTICAL);
+            board.balls[ballIndex].Reflect(VERTICAL);
             bottomActivated = false;
         }
         else {
-            board.ball.color = sf::Color::Black;
+            board.balls[ballIndex].color = sf::Color::Black;
             Display();
             Sleep(400);
 
-            board.ball.color = sf::Color::Red;
-            board.ball.x = WINDOW_SIZE / 2;
-            board.ball.y = WINDOW_SIZE / 2;
-            board.ball.dirX = 1;
-            board.ball.dirY = -1;
+            board.balls[ballIndex].color = sf::Color::Red;
+            board.balls[ballIndex].x = WINDOW_SIZE / 2;
+            board.balls[ballIndex].y = WINDOW_SIZE / 2;
+            board.balls[ballIndex].dirX = 1;
+            board.balls[ballIndex].dirY = -1;
             board.points--;
             Display();
             Sleep(400);
         }
     }
-    else if (board.ball.y <= 0) {
-        board.ball.Reflect(VERTICAL);
+    else if (board.balls[ballIndex].y <= 0) {
+        board.balls[ballIndex].Reflect(VERTICAL);
     }
     else {
         int row, col;
@@ -360,18 +386,20 @@ void Game::HandleCollisions() {
                 col = i % BLOCKS_IN_ROW;
                 leftX = col * BLOCK_WIDTH;
                 topY = row * BLOCK_HEIGHT;
-                if (board.ball.x >= leftX - DELTA
-                    && board.ball.x <= leftX + BLOCK_WIDTH + DELTA
-                    && board.ball.y <= topY + BLOCK_HEIGHT + DELTA
-                    && board.ball.y >= topY - DELTA) {
-                    if (board.ball.x <= leftX  board.ball.x >= leftX + BLOCK_WIDTH) {
-                        board.ball.Reflect(HORIZONTAL);
+                if (board.balls[ballIndex].x >= leftX - DELTA
+                    && board.balls[ballIndex].x <= leftX + BLOCK_WIDTH + DELTA
+                    && board.balls[ballIndex].y <= topY + BLOCK_HEIGHT + DELTA
+                    && board.balls[ballIndex].y >= topY - DELTA) {
+                    if (board.balls[ballIndex].x <= leftX
+                        board.balls[ballIndex].x >= leftX + BLOCK_WIDTH) {
+                        board.balls[ballIndex].Reflect(HORIZONTAL);
                     }
-                    if (board.ball.y <= topY || board.ball.y >= topY + BLOCK_HEIGHT) {
-                        board.ball.Reflect(VERTICAL);
+                    if (board.balls[ballIndex].y <= topY
+                        board.balls[ballIndex].y >= topY + BLOCK_HEIGHT) {
+                        board.balls[ballIndex].Reflect(VERTICAL);
                     }
                     HitAnimation(i);
-                    blocks[i]->OnCollision(board);
+                    blocks[i]->OnCollision(board, ballIndex);
                     if (blocks[i]->isActive == false && blocks[i]->bonusType != NONE) {
                         DropBonus(blocks[i]->x + BLOCK_WIDTH / 2, blocks[i]->y + BLOCK_HEIGHT,
                             blocks[i]->bonusType);
@@ -379,6 +407,31 @@ void Game::HandleCollisions() {
                     break;
                 }
             }
+        }
+    }
+};
+
+void Game::BallOnBallCollisions() {
+    float dx = board.balls[0].x - board.balls[1].x;
+    float dy = board.balls[0].y - board.balls[1].y;
+    float dist = sqrt(dx * dx + dy * dy);
+    if (dist <= 2 * BALL_RADIUS) {
+        std::swap(board.balls[0].dirX, board.balls[1].dirX);
+        std::swap(board.balls[0].dirY, board.balls[1].dirY);
+        std::swap(board.balls[0].speed, board.balls[1].speed);
+        for (int i = 0; i < 2; i++) {
+            board.balls[i].Move(0.01);
+        }
+    }
+}
+
+void Game::HandleCollisions() {
+    for (int i = 0; i < board.balls.size(); i++) {
+        SingleBallCollisions(i);
+    }
+    if (board.balls.size() == 2) {
+        if (board.balls[0].isStuck == false && board.balls[1].isStuck == false) {
+            BallOnBallCollisions();
         }
     }
     for (int i = 0; i < bonuses.size(); i++) {
@@ -397,8 +450,10 @@ void Game::HandleCollisions() {
 };
 
 void Game::Update(float dTime) {
-    if (board.ball.isStuck == false) {
-        board.ball.Move(dTime);
+    for (int i = 0; i < board.balls.size(); i++) {
+        if (board.balls[i].isStuck == false) {
+            board.balls[i].Move(dTime);
+        }
     }
     for (int i = 0; i < bonuses.size(); i++) {
         if (bonuses[i].isDropped) {
@@ -435,11 +490,13 @@ void Game::Display() {
     p.setOutlineThickness(-3.f);
     board.window.draw(p);
 
-    sf::CircleShape c;
-    c.setRadius(12);
-    c.setPosition({ board.ball.x, board.ball.y });
-    c.setFillColor(board.ball.color);
-    board.window.draw(c);
+    for (int i = 0; i < board.balls.size(); i++) {
+        sf::CircleShape c;
+        c.setRadius(BALL_RADIUS);
+        c.setPosition({ board.balls[i].x, board.balls[i].y });
+        c.setFillColor(board.balls[i].color);
+        board.window.draw(c);
+    }
 
     sf::Text text("points: " + std::to_string(board.points), board.font, 30);
     text.setPosition({ 650, 750 });
@@ -505,7 +562,6 @@ void Game::CheckGameOver() {
 int main() {
     srand(time(NULL));
     sf::RenderWindow window(sf::VideoMode(800, 800), "ARKANOID");
-
     sf::Font font;
     font.loadFromFile("C:/Windows/Fonts/Arial.ttf");
 
@@ -513,22 +569,26 @@ int main() {
     Game game(b);
     game.Display();
 
-    float ballSpeed, ballDirX;
+    float ballSpeed[2], ballDirX[2];
 
     while (window.isOpen()) {
 
-        if (game.board.ball.isStuck == false) {
-            ballSpeed = game.board.ball.speed;
-            ballDirX = game.board.ball.dirX;
+        for (int i = 0; i < game.board.balls.size(); i++) {
+            if (game.board.balls[i].isStuck == false) {
+                ballSpeed[i] = game.board.balls[i].speed;
+                ballDirX[i] = game.board.balls[i].dirX;
+            }
         }
 
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
             if (game.board.paddle.x > 0) {
                 game.board.paddle.dirX = -1;
                 game.board.paddle.Move(0.01);
-                if (game.board.ball.isStuck) {
-                    game.board.ball.dirX = -1;
-                    game.board.ball.Move(0.01);
+                for (int i = 0; i < game.board.balls.size(); i++) {
+                    if (game.board.balls[i].isStuck) {
+                        game.board.balls[i].dirX = -1;
+                        game.board.balls[i].Move(0.01);
+                    }
                 }
             }
         }
@@ -536,19 +596,23 @@ int main() {
             if (game.board.paddle.x < WINDOW_SIZE - game.board.paddle.size) {
                 game.board.paddle.dirX = 1;
                 game.board.paddle.Move(0.01);
-                if (game.board.ball.isStuck) {
-                    game.board.ball.dirX = 1;
-                    game.board.ball.Move(0.01);
+                for (int i = 0; i < game.board.balls.size(); i++) {
+                    if (game.board.balls[i].isStuck) {
+                        game.board.balls[i].dirX = 1;
+                        game.board.balls[i].Move(0.01);
+                    }
                 }
             }
         }
 
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
-            if (game.board.ball.isStuck) {
-                game.board.ball.isStuck = false;
-                game.board.ball.speed = ballSpeed;
-                game.board.ball.dirX = ballDirX;
-                game.board.ball.dirY = -1;
+            for (int i = 0; i < game.board.balls.size(); i++) {
+                if (game.board.balls[i].isStuck) {
+                    game.board.balls[i].isStuck = false;
+                    game.board.balls[i].speed = ballSpeed[i];
+                    game.board.balls[i].dirX = ballDirX[i];
+                    game.board.balls[i].dirY = -1;
+                }
             }
         }
 
