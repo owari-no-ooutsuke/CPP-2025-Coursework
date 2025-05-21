@@ -44,42 +44,14 @@ Board::Board(sf::RenderWindow& wind, sf::Font f) : window(wind), font(f) {
     points = 0;
     Ball b;
     balls.push_back(b);
+    bottomActivated = false;
 }
-
-//создание бонуса по координатам и типу
-Bonus::Bonus(float startX, float startY, BonusType bonusType) {
-    x = startX;
-    y = startY;
-    dirX = 0;
-    dirY = 1;
-    speed = BONUS_SPEED;
-    isDropped = true;
-    type = bonusType;
-    switch ((int)type)
-    {
-    case 1:
-        color = sf::Color::Yellow;
-        break;
-    case 2:
-        color = sf::Color::Red;
-        break;
-    case 3:
-        color = sf::Color::Blue;
-        break;
-    case 4:
-        color = sf::Color::Cyan;
-        break;
-    case 5:
-        color = sf::Color::Magenta;
-        break;
-    }
-};
 
 //создание неразрушаемого блока
 IndestructibleBlock::IndestructibleBlock(float leftX, float topY) {
     x = leftX;
     y = topY;
-    bonusType = NONE;
+    hasBonus = false;
     isDestructible = false;
 };
 
@@ -88,7 +60,7 @@ SpeedBoostBlock::SpeedBoostBlock(float leftX, float topY) {
     x = leftX;
     y = topY;
     health = rand() % 3 + 1;
-    bonusType = NONE;
+    hasBonus = false;
     isDestructible = true;
 };
 
@@ -107,7 +79,13 @@ PlainBlock::PlainBlock(float leftX, float topY) {
     x = leftX;
     y = topY;
     health = rand() % 3 + 1;
-    bonusType = (BonusType)(rand() % 6);
+    int bonusNum = (rand() % 6);
+    if (bonusNum == 0) {
+        hasBonus = false;
+    }
+    else {
+        hasBonus = true;
+    }
     isDestructible = true;
 };
 
@@ -117,5 +95,80 @@ void PlainBlock::OnCollision(Board& board, int ballIndex) {
     board.points++;
     if (health == 0) {
         isActive = false;
+    }
+}
+
+//создание бонуса по координатам и типу
+Bonus::Bonus(float startX, float startY) {
+    x = startX;
+    y = startY;
+    dirX = 0;
+    dirY = 1;
+    speed = BONUS_SPEED;
+    isDropped = true;
+};
+
+ChangeSizeBonus::ChangeSizeBonus(float startX, float startY): Bonus(startX, startY) {
+    color = sf::Color::Yellow;
+}
+
+void ChangeSizeBonus::Activate(Board& board) {
+    if (board.paddle.size <= BLOCK_WIDTH) {
+        board.paddle.size += BLOCK_WIDTH / 4;
+    }
+    else {
+        board.paddle.size += (float)((rand() % 2) * 2 - 1) * BLOCK_WIDTH / 4;
+    }
+}
+
+ChangeSpeedBonus::ChangeSpeedBonus(float startX, float startY) : Bonus(startX, startY) {
+    color = sf::Color::Red;
+}
+
+void ChangeSpeedBonus::Activate(Board& board) {
+    for (int i = 0; i < board.balls.size(); i++) {
+        if (board.balls[i].speed <= START_SPEED) {
+            board.balls[i].speed += SPEED_BOOST * 2;
+        }
+        else {
+            board.balls[i].speed += ((rand() % 2) * 2 - 1) * SPEED_BOOST;
+        }
+    }
+}
+
+ChangeStickingBonus::ChangeStickingBonus(float startX, float startY) : Bonus(startX, startY) {
+    color = sf::Color::Blue;
+}
+
+void ChangeStickingBonus::Activate(Board& board) {
+    for (int i = 0; i < board.balls.size(); i++) {
+        if (board.balls[i].isSticky) {
+            board.balls[i].isSticky = false;
+        }
+        else {
+            board.balls[i].isSticky = true;
+        }
+    }
+}
+
+BottomBonus::BottomBonus(float startX, float startY) : Bonus(startX, startY) {
+    color = sf::Color::Cyan;
+}
+
+void BottomBonus::Activate(Board& board) {
+    board.bottomActivated = true;
+}
+
+ExtraBallBonus::ExtraBallBonus(float startX, float startY) : Bonus(startX, startY) {
+    color = sf::Color::Magenta;
+}
+
+void ExtraBallBonus::Activate(Board& board) {
+    if (board.balls.size() == 1) {
+        Ball b;
+        board.balls.push_back(b);
+    }
+    else {
+        board.balls.pop_back();
     }
 }

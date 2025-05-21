@@ -11,9 +11,8 @@ public:
     Game(Board& b);
     Board& board; //игровое поле
     vector<Block*> blocks; //массив блоков
-    vector<Bonus> bonuses; //массив бонусов
-    bool bottomActivated; //активно ли одноразовое дно
-    void DropBonus(float x, float y, BonusType bonusType);
+    vector<Bonus*> bonuses; //массив бонусов
+    void DropBonus(float x, float y);
     void ActivateBonus(Bonus bonus);
     void HitAnimation(int blockIndex);
     void SingleBallCollisions(int ballIndex);

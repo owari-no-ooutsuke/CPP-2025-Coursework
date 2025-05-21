@@ -2,7 +2,6 @@
 
 //создание игры - тип каждого блока задается рандомно
 Game::Game(Board& b) : board(b) {
-    bottomActivated = false;
     int blockType;
     for (int i = 0; i < BLOCKS_COUNT; i++) {
         blockType = rand() % 5;
@@ -25,55 +24,27 @@ Game::Game(Board& b) : board(b) {
 }
 
 //выпадение бонуса 
-void Game::DropBonus(float x, float y, BonusType bonusType) {
-    Bonus bonus(x, y, bonusType);
-    bonuses.push_back(bonus);
-}
-
-//активация бонуса
-void Game::ActivateBonus(Bonus bonus) {
-    switch ((int)bonus.type)
-    {
-    case 1: //изменение размера каретки
-        if (board.paddle.size <= BLOCK_WIDTH) {
-            board.paddle.size += BLOCK_WIDTH / 4;
-        }
-        else {
-            board.paddle.size += (float)((rand() % 2) * 2 - 1) * BLOCK_WIDTH / 4;
-        }
-        break;
-    case 2: //изменение скорости мяча
-        for (int i = 0; i < board.balls.size(); i++) {
-            if (board.balls[i].speed <= START_SPEED) {
-                board.balls[i].speed += SPEED_BOOST * 2;
-            }
-            else {
-                board.balls[i].speed += ((rand() % 2) * 2 - 1) * SPEED_BOOST;
-            }
-        }
-        break;
-    case 3: //изменение прилипания шарика к каретке
-        for (int i = 0; i < board.balls.size(); i++) {
-            if (board.balls[i].isSticky) {
-                board.balls[i].isSticky = false;
-            }
-            else {
-                board.balls[i].isSticky = true;
-            }
-        }
-        break;
-    case 4: //одноразовое дно
-        bottomActivated = true;
-        break;
-    case 5: //второй мяч
-        if (board.balls.size() == 1) {
-            Ball b;
-            board.balls.push_back(b);
-        }
-        else {
-            board.balls.pop_back();
-        }
-        break;
+void Game::DropBonus(float x, float y) {
+    int bonusType = rand() % 5;
+    if (bonusType == 0) {
+        ChangeSizeBonus* b = new ChangeSizeBonus(x, y);
+        bonuses.push_back(b);
+    }
+    else if (bonusType == 1) {
+        ChangeSpeedBonus* b = new ChangeSpeedBonus(x, y);
+        bonuses.push_back(b);
+    }
+    else if (bonusType == 2) {
+        ChangeStickingBonus* b = new ChangeStickingBonus(x, y);
+        bonuses.push_back(b);
+    }
+    else if (bonusType == 3) {
+        BottomBonus* b = new BottomBonus(x, y);
+        bonuses.push_back(b);
+    }
+    else {
+        ExtraBallBonus* b = new ExtraBallBonus(x, y);
+        bonuses.push_back(b);
     }
 }
 
@@ -141,9 +112,9 @@ void Game::SingleBallCollisions(int ballIndex) {
 
     //с нижней границей поля
     else if (board.balls[ballIndex].y >= WINDOW_SIZE - DELTA) {
-        if (bottomActivated) {
+        if (board.bottomActivated) {
             board.balls[ballIndex].Reflect(VERTICAL);
-            bottomActivated = false;
+            board.bottomActivated = false;
         }
         else {
             board.balls[ballIndex].color = sf::Color::Black;
@@ -190,9 +161,8 @@ void Game::SingleBallCollisions(int ballIndex) {
                     HitAnimation(i);
                     blocks[i]->OnCollision(board, ballIndex);
 
-                    if (blocks[i]->isActive == false && blocks[i]->bonusType != NONE) {
-                        DropBonus(blocks[i]->x + BLOCK_WIDTH / 2, blocks[i]->y + BLOCK_HEIGHT,
-                            blocks[i]->bonusType);
+                    if (blocks[i]->isActive == false && blocks[i]->hasBonus == true) {
+                        DropBonus(blocks[i]->x + BLOCK_WIDTH / 2, blocks[i]->y + BLOCK_HEIGHT);
                     }
                     break;
                 }
@@ -218,15 +188,15 @@ void Game::BallOnBallCollisions() {
 
 //проверка и обработка столкновений бонусов с кареткой
 void Game::BonusCollisions(int bonusIndex) {
-    if (bonuses[bonusIndex].isDropped) {
-        if (bonuses[bonusIndex].y >= WINDOW_SIZE - BLOCK_HEIGHT - 2 * DELTA
-            && bonuses[bonusIndex].x >= board.paddle.x - DELTA
-            && bonuses[bonusIndex].x <= board.paddle.x + board.paddle.size + DELTA) {
-            bonuses[bonusIndex].isDropped = false;
-            ActivateBonus(bonuses[bonusIndex]);
+    if (bonuses[bonusIndex]->isDropped) {
+        if (bonuses[bonusIndex]->y >= WINDOW_SIZE - BLOCK_HEIGHT - 2 * DELTA
+            && bonuses[bonusIndex]->x >= board.paddle.x - DELTA
+            && bonuses[bonusIndex]->x <= board.paddle.x + board.paddle.size + DELTA) {
+            bonuses[bonusIndex]->isDropped = false;
+            bonuses[bonusIndex]->Activate(board);
         }
-        else if (bonuses[bonusIndex].y >= WINDOW_SIZE) {
-            bonuses[bonusIndex].isDropped = false;
+        else if (bonuses[bonusIndex]->y >= WINDOW_SIZE) {
+            bonuses[bonusIndex]->isDropped = false;
         }
     }
 }
@@ -257,8 +227,8 @@ void Game::Update(float dTime) {
         }
     }
     for (int i = 0; i < bonuses.size(); i++) {
-        if (bonuses[i].isDropped) {
-            bonuses[i].Move(dTime);
+        if (bonuses[i]->isDropped) {
+            bonuses[i]->Move(dTime);
         }
     }
     HandleCollisions();
@@ -278,7 +248,7 @@ void Game::Display() {
         }
     }
 
-    if (bottomActivated) {
+    if (board.bottomActivated) {
         sf::RectangleShape bottom({ WINDOW_SIZE, DELTA });
         bottom.setPosition({ 0, WINDOW_SIZE - DELTA });
         bottom.setFillColor(sf::Color::White);
@@ -306,10 +276,10 @@ void Game::Display() {
     board.window.draw(text);
 
     for (int i = 0; i < bonuses.size(); i++) {
-        if (bonuses[i].isDropped) {
+        if (bonuses[i]->isDropped) {
             sf::CircleShape bon(15, 4);
-            bon.setPosition({ bonuses[i].x, bonuses[i].y });
-            bon.setFillColor(bonuses[i].color);
+            bon.setPosition({ bonuses[i]->x, bonuses[i]->y });
+            bon.setFillColor(bonuses[i]->color);
             board.window.draw(bon);
         }
     }

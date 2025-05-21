@@ -20,16 +20,6 @@ enum Direction {
     HORIZONTAL
 };
 
-//тип бонуса
-enum BonusType {
-    NONE = 0,
-    CHANGE_SIZE, //изменение размера каретки
-    CHANGE_SPEED, //изменение скорости мяча
-    CHANGE_STICKING, //изменение прилипания шарика к каретке
-    BOTTOM, //одноразовое дно
-    EXTRA_BALL //второй мяч
-};
-
 //объект - имеет координаты и цвет
 class Object {
 public:
@@ -70,16 +60,9 @@ public:
     vector<Ball> balls;
     Paddle paddle;
     int points; //счетчик очков
+    bool bottomActivated; //активно ли одноразовое дно
     sf::RenderWindow& window;
     sf::Font font;
-};
-
-//бонус
-class Bonus : public Moving {
-public:
-    Bonus(float startX, float startY, BonusType bonusType);
-    BonusType type;
-    bool isDropped; //выпущен ли бонус (отображать ли его)
 };
 
 //блок - абстрактный класс
@@ -89,7 +72,7 @@ public:
     bool isActive; //активен ли
     int health; //здоровье
     bool isDestructible; //можно ли уничтожить
-    BonusType bonusType; //тип бонуса при уничтожении
+    bool hasBonus; //есть ли бонус
     virtual void OnCollision(Board& board, int ballIndex) = 0;
 };
 
@@ -113,4 +96,49 @@ public:
     PlainBlock(float leftX, float topY);
     void OnCollision(Board& board, int ballIndex) override;
 };
+
+//бонус - абстрактный класс
+class Bonus : public Moving {
+public:
+    Bonus(float startX, float startY);
+    bool isDropped; //выпущен ли бонус (отображать ли его)
+    virtual void Activate(Board& board) = 0;
+};
+
+//бонус - изменение размера каретки
+class ChangeSizeBonus : public Bonus {
+public:
+    ChangeSizeBonus(float startX, float startY);
+    void Activate(Board& board) override;
+};
+
+//бонус - изменение скорости мяча
+class ChangeSpeedBonus : public Bonus {
+public:
+    ChangeSpeedBonus(float startX, float startY);
+    void Activate(Board& board) override;
+};
+
+//бонус - изменение прилипания мяча к каретке
+class ChangeStickingBonus : public Bonus {
+public:
+    ChangeStickingBonus(float startX, float startY);
+    void Activate(Board& board) override;
+};
+
+//бонус - одноразовое дно
+class BottomBonus : public Bonus {
+public:
+    BottomBonus(float startX, float startY);
+    void Activate(Board& board) override;
+};
+
+//бонус - второй мяч
+class ExtraBallBonus : public Bonus {
+public:
+    ExtraBallBonus(float startX, float startY);
+    void Activate(Board& board) override;
+};
+
+
 
