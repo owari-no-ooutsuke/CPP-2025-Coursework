@@ -3,22 +3,20 @@
 //создание игры - тип каждого блока задается рандомно
 Game::Game(Board& b) : board(b) {
     int blockType;
+    float leftX, topY;
     for (int i = 0; i < BLOCKS_COUNT; i++) {
+        leftX = (i % BLOCKS_IN_ROW)* BLOCK_WIDTH;
+        topY = (i / BLOCKS_IN_ROW) * BLOCK_HEIGHT;
+
         blockType = rand() % 5;
         if (blockType == 0) {
-            IndestructibleBlock* b = new IndestructibleBlock((i % BLOCKS_IN_ROW) * BLOCK_WIDTH,
-                (i / BLOCKS_IN_ROW) * BLOCK_HEIGHT);
-            blocks.push_back(b);
+            blocks.push_back(make_unique<IndestructibleBlock>(leftX, topY));
         }
         else if (blockType == 1) {
-            SpeedBoostBlock* b = new SpeedBoostBlock((i % BLOCKS_IN_ROW) * BLOCK_WIDTH,
-                (i / BLOCKS_IN_ROW) * BLOCK_HEIGHT);
-            blocks.push_back(b);
+            blocks.push_back(make_unique<SpeedBoostBlock>(leftX, topY));
         }
         else {
-            PlainBlock* b = new PlainBlock((i % BLOCKS_IN_ROW) * BLOCK_WIDTH,
-                (i / BLOCKS_IN_ROW) * BLOCK_HEIGHT);
-            blocks.push_back(b);
+            blocks.push_back(make_unique<PlainBlock>(leftX, topY));
         }
     }
 }
@@ -27,24 +25,19 @@ Game::Game(Board& b) : board(b) {
 void Game::DropBonus(float x, float y) {
     int bonusType = rand() % 5;
     if (bonusType == 0) {
-        ChangeSizeBonus* b = new ChangeSizeBonus(x, y);
-        bonuses.push_back(b);
+        bonuses.push_back(make_unique<ChangeSizeBonus>(x, y));
     }
     else if (bonusType == 1) {
-        ChangeSpeedBonus* b = new ChangeSpeedBonus(x, y);
-        bonuses.push_back(b);
+        bonuses.push_back(make_unique<ChangeSpeedBonus>(x, y));
     }
     else if (bonusType == 2) {
-        ChangeStickingBonus* b = new ChangeStickingBonus(x, y);
-        bonuses.push_back(b);
+        bonuses.push_back(make_unique<ChangeStickingBonus>(x, y));
     }
     else if (bonusType == 3) {
-        BottomBonus* b = new BottomBonus(x, y);
-        bonuses.push_back(b);
+        bonuses.push_back(make_unique<BottomBonus>(x, y));
     }
     else {
-        ExtraBallBonus* b = new ExtraBallBonus(x, y);
-        bonuses.push_back(b);
+        bonuses.push_back(make_unique<ExtraBallBonus>(x, y));
     }
 }
 

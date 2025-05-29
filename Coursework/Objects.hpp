@@ -74,6 +74,7 @@ public:
     bool isDestructible; //можно ли уничтожить
     bool hasBonus; //есть ли бонус
     virtual void OnCollision(Board& board, int ballIndex) = 0;
+    virtual ~Block() { };
 };
 
 //неразрушаемый блок
@@ -81,6 +82,7 @@ class IndestructibleBlock : public Block {
 public:
     IndestructibleBlock(float leftX, float topY);
     void OnCollision(Board& board, int ballIndex) override { };
+    virtual ~IndestructibleBlock() { };
 };
 
 //блок, увеличивающий скорость мяча при столкновении
@@ -88,6 +90,7 @@ class SpeedBoostBlock : public Block {
 public:
     SpeedBoostBlock(float leftX, float topY);
     void OnCollision(Board& board, int ballIndex) override;
+    virtual ~SpeedBoostBlock() { };
 };
 
 //обычный блок - может быть с бонусом или без
@@ -95,6 +98,7 @@ class PlainBlock : public Block {
 public:
     PlainBlock(float leftX, float topY);
     void OnCollision(Board& board, int ballIndex) override;
+    virtual ~PlainBlock() { };
 };
 
 //бонус - абстрактный класс
@@ -103,6 +107,7 @@ public:
     Bonus(float startX, float startY);
     bool isDropped; //выпущен ли бонус (отображать ли его)
     virtual void Activate(Board& board) = 0;
+    virtual ~Bonus() { };
 };
 
 //бонус - изменение размера каретки
@@ -110,6 +115,7 @@ class ChangeSizeBonus : public Bonus {
 public:
     ChangeSizeBonus(float startX, float startY);
     void Activate(Board& board) override;
+    virtual ~ChangeSizeBonus() { };
 };
 
 //бонус - изменение скорости мяча
@@ -117,6 +123,7 @@ class ChangeSpeedBonus : public Bonus {
 public:
     ChangeSpeedBonus(float startX, float startY);
     void Activate(Board& board) override;
+    virtual ~ChangeSpeedBonus() { };
 };
 
 //бонус - изменение прилипания мяча к каретке
@@ -124,6 +131,7 @@ class ChangeStickingBonus : public Bonus {
 public:
     ChangeStickingBonus(float startX, float startY);
     void Activate(Board& board) override;
+    virtual ~ChangeStickingBonus() { };
 };
 
 //бонус - одноразовое дно
@@ -131,6 +139,7 @@ class BottomBonus : public Bonus {
 public:
     BottomBonus(float startX, float startY);
     void Activate(Board& board) override;
+    virtual ~BottomBonus() { };
 };
 
 //бонус - второй мяч
@@ -138,6 +147,7 @@ class ExtraBallBonus : public Bonus {
 public:
     ExtraBallBonus(float startX, float startY);
     void Activate(Board& board) override;
+    virtual ~ExtraBallBonus() { };
 };
 
 
